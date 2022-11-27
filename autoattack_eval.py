@@ -65,21 +65,21 @@ if __name__ == "__main__":
     adversary = aa.AutoAttack(forward_pass, norm="Linf", eps=eps, log_path=logout_path)
 
     # Run the evaluation
-    num_cor = 0
-    num_total = 0.0
-    num_b = 0
-    for batch in val_loader:
-        num_b += 1
-        if num_b == args.break_at:
-            break
-        x0, y0 = batch
-        _, yadv = adversary.run_standard_evaluation(x0, y0, return_labels=True, bs=1024)
+    # num_cor = 0
+    # num_total = 0.0
+    # num_b = 0
+    # for batch in val_loader:
+    #     num_b += 1
+    #     if num_b == args.break_at:
+    #         break
+    #     x0, y0 = batch
+    #     _, yadv = adversary.run_standard_evaluation(x0, y0, return_labels=True, bs=1024)
 
-        cor = (yadv.cpu() == y0).sum().item()
-        num_cor += cor
-        num_total += y0.shape[0]
+    #     cor = (yadv.cpu() == y0).sum().item()
+    #     num_cor += cor
+    #     num_total += y0.shape[0]
 
-    res = {"aa_acc": 100 * (num_cor / num_total)}
+    # res = {"aa_acc": 100 * (num_cor / num_total)}
 
     eval_args = {
         "mode": "pgd",
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         "adv_norm": "Linf",
         "adv": True,
     }
-
+    print()
     eval_res = model.evaluate(val_loader, **eval_args)
 
     res["pgd50_acc"] = eval_res["acc"]

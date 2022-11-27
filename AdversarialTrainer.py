@@ -203,6 +203,7 @@ class AdversarialTrainer:
         alpha = alpha * epsilon / float(K)
 
         exp_path = self.topdir.joinpath(exp_tag)
+        print('save_path=',exp_path)
         self.checkpoint_dir = exp_path.joinpath("checkpoints")
         self.checkpoint_dir.mkdir(exist_ok=True, parents=True)
 
