@@ -5,6 +5,9 @@ import argparse
 import yaml
 from AdversarialTrainer import AdversarialTrainer
 import DataLoad as DL
+from advertorch.attacks import LinfPGDAttack, L2PGDAttack, FGSM
+import torch.nn as nn
+import torch
 
 LOADERS = {"cifar10": DL.get_loaders_cifar10, "cifar100": DL.get_loaders_cifar100}
 
@@ -13,10 +16,24 @@ MODELS = {
     "cifar100": "cifar100_resnet18_baseline_nat_acc_76p3.pt",
 }
 
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 def get_best_checkpoint_simple(cd):
     bpath = list(Path(cd).rglob("checkpoint__best.pt"))
     return bpath[0]
+
+def accu(model, dataloader):
+    model1 = model.model.eval()
+    model1.to(device)
+    acc = 0
+    for input, target in dataloader:
+        input = input.to(device)
+        target = target.to(device)
+        input = adversary_8.perturb(input,target)
+        o = model1(input)
+        acc += (o.argmax(dim=1).long() == target).float().mean()
+    print ("robust acc is ",acc / len(dataloader))
+    return acc / len(dataloader)
 
 
 if __name__ == "__main__":
@@ -43,9 +60,9 @@ if __name__ == "__main__":
     exp_dir = Path(args.exp_dir)
     logout_path = exp_dir.joinpath(f"autoattack_results_{args.tag}.txt")
 
-    with exp_dir.joinpath("hparams.yaml").open("r") as f:
-        eps = yaml.safe_load(f)["epsilon"]
-
+    #  with exp_dir.joinpath("hparams.yaml").open("r") as f:
+    #     eps = yaml.safe_load(f)["epsilon"]
+    eps=8/255
     # Load model
     model_path = (
         get_best_checkpoint_simple(exp_dir)
@@ -62,7 +79,7 @@ if __name__ == "__main__":
     def forward_pass(x):
         return model.forward(x, inplace=False)
 
-    adversary = aa.AutoAttack(forward_pass, norm="Linf", eps=eps, log_path=logout_path)
+    # adversary = aa.AutoAttack(forward_pass, norm="Linf", eps=eps, log_path=logout_path)
 
     # Run the evaluation
     # num_cor = 0
@@ -88,9 +105,26 @@ if __name__ == "__main__":
         "adv_norm": "Linf",
         "adv": True,
     }
-    print()
+    print('pgd-50')
     eval_res = model.evaluate(val_loader, **eval_args)
-
+    eps=8/255
+    eps_iter=2/255
+    adversary_8 = LinfPGDAttack(
+                        model.model, loss_fn=nn.CrossEntropyLoss(), eps=eps, nb_iter=20, eps_iter=eps_iter,
+                        rand_init=1, clip_min=0.0, clip_max=1.0, targeted=False
+                    )
+    accu(model,val_loader)
+    adversary_8 = LinfPGDAttack(
+                        model.model, loss_fn=nn.CrossEntropyLoss(), eps=eps, nb_iter=50, eps_iter=eps_iter,
+                        rand_init=1, clip_min=0.0, clip_max=1.0, targeted=False
+                    )
+    accu(model,val_loader)
+    adversary_8 = FGSM(
+            model.model, loss_fn=nn.CrossEntropyLoss(), eps=eps,
+            clip_min=0.0, clip_max=1.0, targeted=False
+        )
+    print('FGSM:')
+    accu(model,val_loader)
     res["pgd50_acc"] = eval_res["acc"]
     with exp_dir.joinpath("autoattack_and_pgd50_value.yaml").open("w") as f:
         yaml.dump(res, f)
